@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Falls du eigene globale Styles hast, kommen sie hier drunter */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}

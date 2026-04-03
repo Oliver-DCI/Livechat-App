@@ -1,0 +1,133 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Rollen-Definition für den Admin-Check
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  name             String?
+  email            String?   @unique
+  password         String    // Gehashtes Passwort
+  isAdmin          Boolean   @default(false)
+  
+  // Profil-Medien
+  image            String?   // Haupt-Profilbild URL
+  
+  // Die 3 zusätzlichen Galerie-Bilder
+  image1           String?
+  image2           String?
+  image3           String?
+
+  // Die 3 Musik-Tracks / YouTube URLs
+  song1            String?
+  song2            String?
+  song3            String?
+  
+  // Status & Rechte
+  role             UserRole  @default(USER)
+  isOnline         Boolean   @default(false)
+  lastSeen         DateTime? @default(now())
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Nachrichten-Relationen
+  messages         Message[] @relation("SentMessages")
+  receivedMsgs     Message[] @relation("ReceivedMessages")
+
+  // Freundschafts-Relationen
+  sentRequests     Friendship[] @relation("sentRequests")
+  receivedRequests Friendship[] @relation("receivedRequests")
+
+  // Relation zu den Posts (Discovery & Moments Feed)
+  posts            Post[]    @relation("UserPosts")
+
+  // Relation zu den Kommentaren
+  comments         Comment[] @relation("UserComments")
+}
+
+model Post {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  
+  // TYP-Unterscheidung für den Feed
+  type       String   @default("TEXT") // "TEXT", "IMAGE_UPDATE", "SONG_UPDATE"
+  
+  content    String?  // Der Text des Posts oder eine automatische Beschreibung
+  image      String?  // Optionales Bild (für klassische Posts)
+  images      String[] // NEU: Array für mehrere Bilder
+  youtubeLinks String[] // NEU: Array für die YouTube URLs
+  mediaUrl   String?  // URL zum neuen Galeriebild oder Song-Link (für automatische Updates)
+  
+  // KI-INTEGRATION (Magic AI)
+  aiAnalysis String?  // KI-generierte Beschreibung des Vibes
+  aiTags     String[] // Automatische Tags (z.B. ["Neon", "Deep House", "Nightlife"])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Verknüpfung zum User
+  userId     String   @db.ObjectId
+  user       User     @relation("UserPosts", fields: [userId], references: [id], onDelete: Cascade)
+
+  // VERKNÜPFUNG ZU DEN KOMMENTAREN
+  comments   Comment[] @relation("PostComments")
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  text      String   // Max 255 Zeichen (Validierung erfolgt in der API)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation zum Post
+  postId    String   @db.ObjectId
+  post      Post     @relation("PostComments", fields: [postId], references: [id], onDelete: Cascade)
+
+  // Relation zum User (Wer hat kommentiert?)
+  userId    String   @db.ObjectId
+  user      User     @relation("UserComments", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Friendship {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  status      String   @default("PENDING") // "PENDING", "ACCEPTED", "DECLINED"
+  
+  senderId    String   @db.ObjectId
+  sender      User     @relation("sentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId  String   @db.ObjectId
+  receiver    User     @relation("receivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+}
+
+model Message {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  body        String?
+  image       String?  // Für Bilder im Chat
+  
+  // WICHTIG FÜR DIE NOTIFICATIONS
+  isRead      Boolean  @default(false) 
+  
+  createdAt   DateTime @default(now())
+
+  senderId    String   @db.ObjectId
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  recipientId String   @db.ObjectId
+  recipient   User     @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+}
