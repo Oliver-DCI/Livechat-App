@@ -363,7 +363,7 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
               {user.friends && user.friends.length > 0 ? (
                 user.friends.map((friend: any) => (
                   <div key={friend.id} className="flex items-center justify-between p-3.5 bg-white/5 border border-white/10 rounded-[30px] hover:border-emerald-500/60 hover:bg-emerald-500/10 transition-all duration-500 group shadow-lg">
-                    <Link href={`/dashboard/profile/${friend.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                    <Link href={`/profile/${friend.id}`} className="flex items-center gap-3 flex-1 min-w-0">
                       <div className="w-12 h-12 rounded-[20px] bg-slate-800 overflow-hidden shrink-0 border border-white/10 group-hover:border-emerald-500 transition-colors">
                         <img src={friend.image || "/api/placeholder/48/48"} className="w-full h-full object-cover" alt="" />
                       </div>
