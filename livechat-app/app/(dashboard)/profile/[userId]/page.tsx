@@ -15,7 +15,7 @@ import {
   History,
   Zap,
   Trash2,
-  AlertCircle // Geändert von AlertTriangle für einen cleanerem Vibe
+  AlertCircle 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -53,12 +53,16 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
     fetchProfile();
   }, [userId]);
 
+  // VERBESSERTER YOUTUBE EXTRACTOR
   const getEmbedUrl = (url: string) => {
-    if (!url) return null;
-    let videoId = "";
-    if (url.includes("v=")) videoId = url.split("v=")[1]?.split("&")[0];
-    else if (url.includes("youtu.be/")) videoId = url.split("youtu.be/")[1]?.split("?")[0];
-    else videoId = url.split("/").pop()?.split("?")[0] || "";
+    if (!url || typeof url !== 'string' || url.trim() === "") return null;
+    
+    // Erkennt ID aus: youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID etc.
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+
+    const videoId = (match && match[2].length === 11) ? match[2] : null;
+    
     return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
   };
 
@@ -129,12 +133,10 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
   return (
     <div className="max-w-7xl mx-auto pb-24 px-4 space-y-8 animate-in fade-in duration-1000 text-white relative">
       
-      {/* 1. VIOLET DELETE MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
           <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" onClick={() => !isDeleting && setShowDeleteModal(false)} />
           <div className="relative w-full max-w-md bg-slate-900/90 border border-violet-500/30 rounded-[40px] p-10 shadow-[0_0_100px_rgba(139,92,246,0.15)] overflow-hidden">
-             {/* Background Glows */}
              <div className="absolute -top-24 -right-24 w-48 h-48 bg-violet-600/20 blur-[80px] rounded-full" />
              <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-fuchsia-600/10 blur-[80px] rounded-full" />
              
@@ -237,24 +239,29 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
             </div>
           </div>
 
-          {/* SOUNDTRACK */}
+          {/* SOUNDTRACK / VIDEO LINKS */}
           <div className={cn("bg-slate-950/40 backdrop-blur-3xl border border-white/5 rounded-[50px] p-8 relative overflow-hidden transition-all duration-500 hover:border-rose-500/40 hover:shadow-[0_0_40px_rgba(244,63,94,0.15)]", !canSeeContent && "opacity-40")}>
             {!canSeeContent && <LockOverlay />}
             <div className="flex items-center gap-4 mb-8">
               <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.2)]"><Music size={22} /></div>
               <h3 className="text-white font-black uppercase italic tracking-widest text-lg">Soundtrack <span className="text-rose-500">Links</span></h3>
             </div>
-            <div className="grid grid-cols-2 gap-6">
-              {[user.song1, user.song2, user.song3, user.song4].map((url, i) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[user.video1, user.video2, user.video3, user.video4].map((url, i) => {
                 const embedUrl = getEmbedUrl(url);
                 return (
-                  <div key={i} className="aspect-video rounded-[40px] bg-slate-900 border border-white/10 overflow-hidden relative shadow-2xl transition-all duration-500 hover:border-rose-500/60 hover:shadow-[0_0_35px_rgba(244,63,94,0.3)] group/song">
+                  <div key={i} className="aspect-video rounded-[30px] bg-slate-900 border border-white/10 overflow-hidden relative shadow-2xl transition-all duration-500 hover:border-rose-500/60 hover:shadow-[0_0_35px_rgba(244,63,94,0.3)] group/song">
                     {embedUrl ? (
-                      <iframe src={embedUrl} className="w-full h-full opacity-80 group-hover/song:opacity-100 transition-all" allowFullScreen />
+                      <iframe 
+                        src={embedUrl} 
+                        className="w-full h-full opacity-80 group-hover/song:opacity-100 transition-all border-0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen 
+                      />
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center text-white/5 font-black italic uppercase text-[10px] tracking-widest gap-2">
+                      <div className="w-full h-full flex flex-col items-center justify-center text-white/5 font-black italic uppercase text-[10px] tracking-widest gap-2 bg-slate-950/20">
                         <Music size={16} className="opacity-10" />
-                        No Audio
+                        Empty Slot 0{i+1}
                       </div>
                     )}
                   </div>
@@ -263,7 +270,7 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
             </div>
           </div>
 
-          {/* DISCOVERY FEED - VIOLET THEMED TRASH */}
+          {/* DISCOVERY FEED */}
           <div className={cn("space-y-8 relative", !canSeeContent && "opacity-40")}>
             {!canSeeContent && <LockOverlay />}
             <div className="pt-12 pb-4">
@@ -323,7 +330,7 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
                         const embedUrl = getEmbedUrl(link);
                         return embedUrl ? (
                           <div key={`vid-${idx}`} className="aspect-square relative rounded-3xl border border-white/10 overflow-hidden bg-black">
-                            <iframe src={embedUrl} className="w-full h-full" allowFullScreen />
+                            <iframe src={embedUrl} className="w-full h-full border-0" allowFullScreen />
                           </div>
                         ) : null;
                       })}
@@ -347,7 +354,7 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
           </div>
         </div>
 
-        {/* RIGHT COLUMN */}
+        {/* RIGHT COLUMN - NETWORK CIRCLE */}
         <div className="lg:col-span-4">
           <div className={cn(
             "bg-slate-950/40 backdrop-blur-3xl border border-white/5 rounded-[50px] p-8 sticky top-8 max-h-[85vh] flex flex-col shadow-2xl transition-all duration-500 hover:border-emerald-500/40 hover:shadow-[0_0_40px_rgba(16,182,129,0.2)]", 

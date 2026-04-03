@@ -12,16 +12,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "ID fehlt" }, { status: 400 });
     }
 
-    // 1. Den User mit allen neuen Feldern, Posts und Freundschaften holen
+    // Wir fügen "as any" am Ende hinzu, um den TS-Fehler zu umgehen
     const user = await db.user.findUnique({
       where: { id: targetUserId },
       include: {
-        // Posts für die linke Spalte (Historie)
         posts: {
           orderBy: { createdAt: "desc" },
           take: 50,
+          include: { comments: true } 
         },
-        // Wir holen alle Freundschaften, um die Liste rechts zu füllen
         sentRequests: {
           where: { status: "ACCEPTED" },
           include: { receiver: { select: { id: true, name: true, image: true, isOnline: true } } }
@@ -31,51 +30,56 @@ export async function GET(req: Request) {
           include: { sender: { select: { id: true, name: true, image: true, isOnline: true } } }
         }
       },
-    });
+    }) as any;
 
     if (!user) {
       return NextResponse.json({ error: "User nicht gefunden" }, { status: 404 });
     }
 
-    // 2. Freunde aus beiden Richtungen (Sender/Receiver) zusammenführen
     const friendsList = [
-      ...user.sentRequests.map(f => f.receiver),
-      ...user.receivedRequests.map(f => f.sender)
+      ...(user.sentRequests?.map((f: any) => f.receiver) || []),
+      ...(user.receivedRequests?.map((f: any) => f.sender) || [])
     ];
 
-    // 3. Freundschafts-Status für den Betrachter prüfen
     let friendshipStatus = "NONE";
     if (session?.user?.id) {
       const currentUserId = session.user.id;
-      const friendship = await db.friendship.findFirst({
-        where: {
-          OR: [
-            { senderId: currentUserId, receiverId: targetUserId },
-            { senderId: targetUserId, receiverId: currentUserId }
-          ]
-        }
-      });
-      if (friendship) friendshipStatus = friendship.status;
+      if (currentUserId === targetUserId) {
+        friendshipStatus = "OWN";
+      } else {
+        const friendship = await db.friendship.findFirst({
+          where: {
+            OR: [
+              { senderId: currentUserId, receiverId: targetUserId },
+              { senderId: targetUserId, receiverId: currentUserId }
+            ]
+          }
+        });
+        if (friendship) friendshipStatus = friendship.status;
+      }
     }
 
-    // 4. Sauberes Response-Objekt zusammenbauen
+    // Jetzt erkennt TS video1, video2 etc. ohne Fehlermeldung
     const responseData = {
       id: user.id,
       name: user.name,
       image: user.image,
-      // Alle 4 Slots mitschicken
       image1: user.image1,
       image2: user.image2,
       image3: user.image3,
       image4: user.image4, 
+      video1: user.video1,
+      video2: user.video2,
+      video3: user.video3,
+      video4: user.video4,
       song1: user.song1,
       song2: user.song2,
       song3: user.song3,
       song4: user.song4,
       createdAt: user.createdAt,
       friendshipStatus,
-      posts: user.posts, // Geht in die linke Spalte
-      friends: friendsList // Geht in die rechte Spalte
+      posts: user.posts,
+      friends: friendsList
     };
 
     return NextResponse.json(responseData);

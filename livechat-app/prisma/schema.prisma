@@ -13,73 +13,65 @@ enum UserRole {
 }
 
 model User {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  name         String?
-  email        String?   @unique
-  password     String    
-  isAdmin      Boolean   @default(false)
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  name             String?
+  email            String?   @unique
+  password         String    
+  isAdmin          Boolean   @default(false)
+  role             UserRole  @default(USER)
   
   // Profil-Medien
-  image        String?   // Haupt-Profilbild URL
+  image            String?   // Haupt-Profilbild URL
   
-  // Die Galerie-Bilder (Erweitert auf 4 Slots)
-  image1       String?
-  image2       String?
-  image3       String?
-  image4       String?   // NEU: 4. Bild-Slot
+  // Galerie-Bilder (4 Slots)
+  image1           String?
+  image2           String?
+  image3           String?
+  image4           String?
 
-  // Die YouTube URLs (Erweitert auf 4 Slots)
-  song1        String?
-  song2        String?
-  song3        String?
-  song4        String?   // NEU: 4. Video-Slot
+  // Video-Slots (4 Slots für YouTube-Links)
+  // Die song1-4 Felder wurden entfernt, um die DB sauber zu halten.
+  video1           String?
+  video2           String?
+  video3           String?
+  video4           String?
   
-  // Status & Rechte
-  role         UserRole  @default(USER)
-  isOnline     Boolean   @default(false)
-  lastSeen     DateTime? @default(now())
+  // Status & Online-Status
+  isOnline         Boolean   @default(false)
+  lastSeen         DateTime? @default(now())
   
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  // Nachrichten-Relationen
-  messages     Message[] @relation("SentMessages")
-  receivedMsgs Message[] @relation("ReceivedMessages")
-
-  // Freundschafts-Relationen
+  // Relationen
+  messages         Message[]    @relation("SentMessages")
+  receivedMsgs     Message[]    @relation("ReceivedMessages")
   sentRequests     Friendship[] @relation("sentRequests")
   receivedRequests Friendship[] @relation("receivedRequests")
-
-  // Relation zu den Posts (Discovery & Moments Feed)
-  posts        Post[]    @relation("UserPosts")
-
-  // Relation zu den Kommentaren
-  comments     Comment[] @relation("UserComments")
+  posts            Post[]       @relation("UserPosts")
+  comments         Comment[]    @relation("UserComments")
 }
 
 model Post {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  type         String   @default("TEXT") // "TEXT", "IMAGE_UPDATE", "VIDEO_UPDATE"
   
-  // TYP-Unterscheidung für den Feed
-  type         String   @default("TEXT") // "TEXT", "IMAGE_UPDATE", "SONG_UPDATE"
-  
-  content      String?  // Der Text des Posts
-  image        String?  // Optionales Bild
+  content      String?  // Text des Posts
+  image        String?  // Primäres Bild
   images       String[] // Array für mehrere Bilder
   youtubeLinks String[] // Array für YouTube URLs
-  mediaUrl     String?  // URL für automatische Updates
+  mediaUrl     String?  // Das Original-Medium
   
-  // KI-INTEGRATION
+  // KI-Integration
   aiAnalysis   String?  
   aiTags       String[] 
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Verknüpfung zum User
+  // Relation zum User
   userId       String   @db.ObjectId
   user         User     @relation("UserPosts", fields: [userId], references: [id], onDelete: Cascade)
-
   comments     Comment[] @relation("PostComments")
 }
 
@@ -97,17 +89,17 @@ model Comment {
 }
 
 model Friendship {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  status      String   @default("PENDING") // "PENDING", "ACCEPTED", "DECLINED"
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  status     String   @default("PENDING") // "PENDING", "ACCEPTED", "DECLINED"
   
-  senderId    String   @db.ObjectId
-  sender      User     @relation("sentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  senderId   String   @db.ObjectId
+  sender     User     @relation("sentRequests", fields: [senderId], references: [id], onDelete: Cascade)
   
-  receiverId  String   @db.ObjectId
-  receiver    User     @relation("receivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  receiverId String   @db.ObjectId
+  receiver   User     @relation("receivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([senderId, receiverId])
 }

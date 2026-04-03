@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-// STUFE 1: Bildbeschreibung (Was ist auf dem Foto?)
+// STUFE 1: Bildbeschreibung (Bleibt gleich)
 async function analyzeImage(imageUrl: string) {
   try {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
@@ -20,17 +20,17 @@ async function analyzeImage(imageUrl: string) {
     const result = await response.json();
     return result[0]?.generated_text || null;
   } catch (error) {
+    console.error("AI Analysis Error:", error);
     return null;
   }
 }
 
-// STUFE 2: Neon-Transformation (Das eigentliche Magic-Artwork)
+// STUFE 2: Neon-Transformation (Bleibt gleich)
 async function generateNeonArtwork(description: string) {
   try {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
     if (!apiKey) return null;
 
-    // Der "YOU&ME" Style-Prompt
     const neonPrompt = `Futuristic neon cyberpunk style portrait, theme: ${description}, vibrant electric blue and violet lighting, glowing highlights, sleek pearl finish, high-end digital art, 8k resolution, cinematic aesthetic.`;
 
     const response = await fetch(
@@ -65,9 +65,16 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { name, image, image1, image2, image3, song1, song2, song3 } = body;
+    
+    // EXTRAKTION: song1-4 entfernt, da im Schema gelöscht!
+    const { 
+      name, 
+      image, 
+      image1, image2, image3, image4, 
+      video1, video2, video3, video4 
+    } = body;
 
-    // 1. Profil-Daten in DB speichern
+    // 1. Profil-Daten in DB speichern (Ohne song-Felder)
     const updatedUser = await db.user.update({
       where: { id: userId },
       data: {
@@ -76,23 +83,27 @@ export async function PATCH(req: Request) {
         ...(image1 !== undefined && { image1 }),
         ...(image2 !== undefined && { image2 }),
         ...(image3 !== undefined && { image3 }),
-        ...(song1 !== undefined && { song1 }),
-        ...(song2 !== undefined && { song2 }),
-        ...(song3 !== undefined && { song3 }),
+        ...(image4 !== undefined && { image4 }),
+        ...(video1 !== undefined && { video1 }),
+        ...(video2 !== undefined && { video2 }),
+        ...(video3 !== undefined && { video3 }),
+        ...(video4 !== undefined && { video4 }),
       },
     });
 
     // 2. Magic AI & Discovery Feed Logik
-    const featuredMedia = image1 || image2 || image3 || song1;
-    const isSong = !image1 && !image2 && !image3 && !!song1;
+    // Wir nehmen Video 1 als "Featured Media", wenn kein neues Galeriebild da ist
+    const featuredMedia = image1 || image2 || image3 || image4 || video1;
+    const isVideo = !image1 && !image2 && !image3 && !image4 && !!video1;
 
     if (featuredMedia) {
       const targetTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
       
+      // Suche nach bestehendem Post (Typ auf VIDEO_UPDATE geändert)
       const existingRecentPost = await db.post.findFirst({
         where: {
           userId: userId,
-          type: { in: ["IMAGE_UPDATE", "SONG_UPDATE"] },
+          type: { in: ["IMAGE_UPDATE", "VIDEO_UPDATE"] },
           createdAt: { gte: targetTime }
         }
       });
@@ -100,21 +111,20 @@ export async function PATCH(req: Request) {
       let aiDescription = null;
       let neonArt = null;
 
-      if (!isSong) {
-        // Erst analysieren...
+      // Nur Bilder analysieren, keine YouTube Links
+      if (!isVideo && (image1 || image2 || image3 || image4)) {
         aiDescription = await analyzeImage(featuredMedia);
-        // ...dann das Neon-Bild generieren!
         if (aiDescription) {
           neonArt = await generateNeonArtwork(aiDescription);
         }
       }
 
       const postData = {
-        type: isSong ? "SONG_UPDATE" : "IMAGE_UPDATE",
-        mediaUrl: featuredMedia, // Original-Bild
-        image: neonArt,          // HIER wird das Neon-Bild gespeichert
-        content: isSong 
-          ? "Hat einen neuen Vibe geteilt 🎵" 
+        type: isVideo ? "VIDEO_UPDATE" : "IMAGE_UPDATE",
+        mediaUrl: featuredMedia, 
+        image: neonArt,          
+        content: isVideo 
+          ? "Hat einen neuen Track geteilt 🎥" 
           : `Magic AI Vibe: ${aiDescription || "Neon-Profil aufgefrischt ✨"}`,
         aiAnalysis: aiDescription ? `Vibe Check: ${aiDescription}` : null,
         createdAt: new Date(),
@@ -132,7 +142,10 @@ export async function PATCH(req: Request) {
       }
     }
 
-    return NextResponse.json({ message: "Profil & Magic AI aktualisiert", user: updatedUser });
+    return NextResponse.json({ 
+      message: "Profil & Magic AI aktualisiert", 
+      user: updatedUser 
+    });
 
   } catch (error) {
     console.error("UPDATE_ERROR:", error);
