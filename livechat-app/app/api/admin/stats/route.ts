@@ -21,12 +21,12 @@ export async function GET() {
           email: true,
           image: true,
           createdAt: true,
-          isOnline: true, // WICHTIG: Online Status laden
-          // WICHTIG: Freunde zählen
+          isOnline: true,
           _count: {
             select: {
               sentRequests: { where: { status: "ACCEPTED" } },
-              receivedRequests: { where: { status: "ACCEPTED" } }
+              receivedRequests: { where: { status: "ACCEPTED" } },
+              posts: true, // NEU: Hier werden die Posts in der DB gezählt
             }
           }
         },
@@ -34,10 +34,11 @@ export async function GET() {
       })
     ]);
 
-    // Daten mappen, damit das Frontend "friendsCount" direkt lesen kann
+    // Daten mappen, damit das Frontend die bereinigten Werte direkt lesen kann
     const mappedUsers = allUsers.map(u => ({
       ...u,
-      friendsCount: u._count.sentRequests + u._count.receivedRequests
+      friendsCount: u._count.sentRequests + u._count.receivedRequests,
+      postsCount: u._count.posts // NEU: Den Count in postsCount mappen
     }));
 
     return NextResponse.json({
