@@ -119,10 +119,15 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
 
   if (!user) return <div className="text-white text-center p-20 font-black italic uppercase tracking-widest text-white/20">Profil nicht gefunden.</div>;
 
+  // --- LOGIK-ERWEITERUNG: ADMIN BYPASS ---
   const isOwnProfile = session?.user?.id === userId;
   const isFriend = user.friendshipStatus === "ACCEPTED";
   const isPending = user.friendshipStatus === "PENDING";
-  const canSeeContent = isOwnProfile || isFriend;
+  // Hier prüfen wir auf die isAdmin Eigenschaft aus deiner auth.ts
+  const isAdmin = (session?.user as any)?.isAdmin === true || (session?.user as any)?.role === "ADMIN";
+  
+  // Der Admin darf den Content sehen, auch wenn er kein Freund ist
+  const canSeeContent = isOwnProfile || isFriend || isAdmin;
 
   const filteredPosts = user.posts?.filter((post: any) => {
     if (post.type === "IMAGE_UPDATE" || post.type === "PROFILE_UPDATE") return false;
@@ -184,7 +189,7 @@ export default function ProfilePage({ params }: { params: Promise<{ userId: stri
           <div className="text-center md:text-left flex-1">
              <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
                 <span className="px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-[8px] font-black text-cyan-400 uppercase tracking-[0.4em] italic">
-                  {isOwnProfile ? "Active Identity" : "Member Profile"}
+                  {isAdmin ? "Admin Access" : isOwnProfile ? "Active Identity" : "Member Profile"}
                 </span>
              </div>
              <h1 className="text-6xl font-black italic uppercase tracking-tighter text-white leading-none group-hover/header:text-cyan-50 transition-colors">{user.name}</h1>

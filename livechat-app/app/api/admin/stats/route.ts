@@ -7,15 +7,12 @@ export async function GET() {
     const session = await auth();
     const currentUser = session?.user as any;
 
-    // STRENGER CHECK: Nur echte Admins dürfen rein
     if (!session || (currentUser?.role !== "ADMIN" && !currentUser?.isAdmin)) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
-    // Parallel alle Daten abfragen für maximale Performance
     const [userCount, friendshipCount, allUsers] = await Promise.all([
       db.user.count(),
-      // Wir zählen nur die bestätigten Freundschaften für die "Connections"
       db.friendship.count({ where: { status: "ACCEPTED" } }),
       db.user.findMany({
         select: {
@@ -24,20 +21,34 @@ export async function GET() {
           email: true,
           image: true,
           createdAt: true,
+          isOnline: true, // WICHTIG: Online Status laden
+          // WICHTIG: Freunde zählen
+          _count: {
+            select: {
+              sentRequests: { where: { status: "ACCEPTED" } },
+              receivedRequests: { where: { status: "ACCEPTED" } }
+            }
+          }
         },
         orderBy: { createdAt: "desc" }
       })
     ]);
+
+    // Daten mappen, damit das Frontend "friendsCount" direkt lesen kann
+    const mappedUsers = allUsers.map(u => ({
+      ...u,
+      friendsCount: u._count.sentRequests + u._count.receivedRequests
+    }));
 
     return NextResponse.json({
       stats: {
         totalUsers: userCount,
         activeFriendships: friendshipCount,
       },
-      users: allUsers
+      users: mappedUsers
     });
   } catch (error) {
     console.error("[ADMIN_STATS_GET]", error);
-    return NextResponse.json({ error: "Fehler beim Laden der Admin-Daten" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Laden" }, { status: 500 });
   }
 }

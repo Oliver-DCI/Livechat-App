@@ -1,7 +1,18 @@
-import NextAuth from "next-auth";
+import NextAuth, { type DefaultSession, type User } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+
+// Optional: Erweitere den Session-Typ für TS-Support ohne 'any'
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      role: string;
+      isAdmin: boolean;
+    } & DefaultSession["user"]
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -11,87 +22,70 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        // 1. Eingabe-Check
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.email || !credentials?.password) return null;
 
-        // 2. User in DB suchen
         const user = await db.user.findUnique({
           where: { email: credentials.email as string },
         });
 
-        // 3. Sicherheits-Check: Existiert der User und hat er ein Passwort?
-        if (!user || !user.password) {
-          console.log("AUTH-INFO: Login abgelehnt - User nicht gefunden.");
-          return null; 
-        }
+        // WICHTIG: Falls user null ist oder kein Passwort hat
+        if (!user || !user.password) return null;
 
-        // 4. Passwort-Vergleich
         const isPasswordCorrect = await bcrypt.compare(
           credentials.password as string,
           user.password
         );
 
-        if (!isPasswordCorrect) {
-          console.log("AUTH-INFO: Login abgelehnt - Passwort falsch.");
-          return null;
-        }
+        if (!isPasswordCorrect) return null;
 
-        // 5. Erfolg: Daten für Session bereitstellen
+        // Wir geben das Objekt zurück und stellen sicher, 
+        // dass die ID als String vorliegt (wichtig bei MongoDB)
         return {
-          id: user.id,
+          id: user.id.toString(),
           name: user.name,
           email: user.email,
-          role: user.role,
-          isAdmin: user.isAdmin
-        };
+        } as User; // Hier zwingen wir TS, das als validen User zu akzeptieren
       },
     }),
   ],
+  callbacks: {
+    async jwt({ token, user }) {
+      // Beim ersten Login 'user' Daten ins Token schreiben
+      if (user) {
+        // Wir holen die Rollen-Daten frisch aus der DB
+        const dbUser = await db.user.findUnique({
+          where: { id: user.id },
+          select: { role: true, isAdmin: true }
+        });
+        
+        if (dbUser) {
+          token.id = user.id;
+          token.role = dbUser.role;
+          token.isAdmin = dbUser.isAdmin;
+        }
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      // Daten vom Token in die Session schieben
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        (session.user as any).role = token.role;
+        (session.user as any).isAdmin = token.isAdmin;
+      }
+      return session;
+    },
+  },
   events: {
     async signIn({ user }) {
       if (user?.id) {
         await db.user.update({
           where: { id: user.id },
-          data: { isOnline: true },
-        });
-      }
-    },
-    async signOut(message: any) {
-      const token = message.token;
-      if (token?.sub) {
-        await db.user.update({
-          where: { id: token.sub },
-          data: { isOnline: false },
+          data: { isOnline: true, lastSeen: new Date() },
         });
       }
     },
   },
-  callbacks: {
-    async jwt({ token, user }: any) {
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.isAdmin = user.isAdmin;
-      }
-      return token;
-    },
-    async session({ session, token }: any) {
-      if (session.user) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.isAdmin = token.isAdmin;
-      }
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
-  session: {
-    strategy: "jwt",
-  },
-  secret: process.env.NEXTAUTH_SECRET,
+  session: { strategy: "jwt" },
 });
