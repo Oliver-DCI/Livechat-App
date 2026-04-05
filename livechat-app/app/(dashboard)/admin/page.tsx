@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { 
-  ShieldCheck, Users, Heart, Trash2, Loader2, Activity, Lock, 
-  ExternalLink, X, User as UserIcon, Info, Mail, Calendar, MessageSquare, 
-  ChevronRight, Fingerprint, Command, Zap, Star
+  Users, Heart, Trash2, Loader2, Activity, 
+  ExternalLink, X, Mail, Calendar, MessageSquare, 
+  ChevronRight, Command, Zap, Star, Search, ArrowUpDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type SortField = "name" | "createdAt" | "isOnline" | "friendsCount" | "postsCount";
+type SortOrder = "asc" | "desc";
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -16,6 +19,10 @@ export default function AdminPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -41,13 +48,40 @@ export default function AdminPage() {
     if (!isClient || status === "loading") return;
     const user = session?.user as any;
     const isAdmin = user?.role === "ADMIN" || user?.isAdmin === true;
-
     if (status === "unauthenticated" || !isAdmin) {
       router.push("/dashboard");
     } else {
       loadData();
     }
   }, [status, session, router, isClient]);
+
+  const processedUsers = useMemo(() => {
+    if (!data?.users) return [];
+    let filtered = data.users.filter((u: any) => 
+      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    return filtered.sort((a: any, b: any) => {
+      let valA = a[sortField];
+      let valB = b[sortField];
+      if (sortField === "isOnline") {
+        valA = a.isOnline ? 1 : 0;
+        valB = b.isOnline ? 1 : 0;
+      }
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, searchTerm, sortField, sortOrder]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("desc");
+    }
+  };
 
   const handleDeleteUser = async (id: string) => {
     setIsDeleting(true);
@@ -58,11 +92,7 @@ export default function AdminPage() {
         setSelectedUser(null);
         setConfirmDelete(false);
       }
-    } catch (e) { 
-      console.error("Delete failed"); 
-    } finally { 
-      setIsDeleting(false); 
-    }
+    } catch (e) { console.error("Delete failed"); } finally { setIsDeleting(false); }
   };
 
   if (!isClient) return <div className="min-h-screen bg-transparent" />;
@@ -70,7 +100,7 @@ export default function AdminPage() {
   if (status === "loading" || (loading && !data)) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center gap-4 animate-pulse">
-        <Loader2 className="animate-spin text-rose-500" size={48} />
+        <Loader2 className="animate-spin text-violet-500" size={48} />
         <p className="text-white font-black uppercase tracking-[0.3em] text-sm italic">Accessing Control Center...</p>
       </div>
     );
@@ -79,28 +109,52 @@ export default function AdminPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto space-y-10 animate-in fade-in duration-700 pb-20">
       
-      {/* --- HEADER SECTION (NUN IN VIOLETT) --- */}
+      {/* --- HEADER SECTION --- */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-slate-900/60 p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-md shadow-2xl">
-        <div className="space-y-2">
-          <div className="flex items-center gap-4">
-            {/* Icon nun in Violett passend zur Admin-Karte */}
-            <div className="p-3 bg-violet-600 rounded-2xl text-white shadow-[0_0_30px_rgba(139,92,246,0.4)]">
-              <Command size={32} />
-            </div>
-            <div>
-              <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic leading-none">
-                ADMIN<span className="text-violet-500">CONTROL</span>CENTER
-              </h1>
-              <p className="text-white/30 font-black uppercase tracking-[0.4em] text-[10px] mt-1">
-                YOU&ME Architecture v2.0
-              </p>
-            </div>
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-violet-600 rounded-2xl text-white shadow-[0_0_30px_rgba(139,92,246,0.4)]">
+            <Command size={32} />
+          </div>
+          <div>
+            <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic leading-none">
+              ADMIN<span className="text-violet-500">CONTROL</span>
+            </h1>
+            <p className="text-white/30 font-black uppercase tracking-[0.4em] text-[10px] mt-1">
+              YOU&ME Architecture v2.0
+            </p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-auto">
           <StatCard icon={<Users size={20} />} label="Total Members" value={data?.stats.totalUsers} color="cyan" />
           <StatCard icon={<Heart size={20} />} label="Active Links" value={data?.stats.activeFriendships} color="violet" />
+        </div>
+      </div>
+
+      {/* --- FILTER BAR MIT BREITER SUCHE RECHTS --- */}
+      <div className="bg-slate-900/40 p-4 rounded-3xl border border-white/5 backdrop-blur-sm flex flex-col xl:flex-row items-center gap-6">
+        <div className="flex items-center gap-4 flex-wrap flex-1">
+          <div className="flex items-center gap-2 px-3 border-r border-white/10">
+            <ArrowUpDown size={14} className="text-violet-500" />
+            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Sort:</span>
+          </div>
+          <SortButton label="Name" active={sortField === "name"} order={sortOrder} onClick={() => toggleSort("name")} />
+          <SortButton label="Registry" active={sortField === "createdAt"} order={sortOrder} onClick={() => toggleSort("createdAt")} />
+          <SortButton label="Status" active={sortField === "isOnline"} order={sortOrder} onClick={() => toggleSort("isOnline")} />
+          <SortButton label="Friends" active={sortField === "friendsCount"} order={sortOrder} onClick={() => toggleSort("friendsCount")} />
+          <SortButton label="Posts" active={sortField === "postsCount"} order={sortOrder} onClick={() => toggleSort("postsCount")} />
+        </div>
+
+        {/* VERBREITERTES SUCHFELD */}
+        <div className="relative w-full xl:w-[450px] group">
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-violet-500 transition-colors" />
+          <input 
+            type="text"
+            placeholder="SEARCH BY NAME OR E-MAIL..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-950/60 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/10 text-[10px] font-black tracking-widest focus:outline-none focus:ring-1 focus:ring-violet-500/50 transition-all uppercase italic shadow-inner"
+          />
         </div>
       </div>
 
@@ -112,17 +166,14 @@ export default function AdminPage() {
             <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.5em]">Live Network Nodes</h3>
           </div>
           <div className="text-[9px] font-black text-violet-500 uppercase bg-violet-500/10 px-4 py-1.5 rounded-full border border-violet-500/20 shadow-lg shadow-violet-500/5 italic">
-             {data?.users.length || 0} Registered Entities
+             {processedUsers.length} Match(es)
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {data?.users.map((u: any) => {
+          {processedUsers.map((u: any) => {
             const isOnline = u.isOnline;
-            const friendsCount = u.friendsCount || 0; 
             const isMe = u.id === session?.user?.id;
-            const isFriendOfAdmin = u.isFriend; 
-
             return (
               <div 
                 key={u.id}
@@ -136,73 +187,32 @@ export default function AdminPage() {
                 )}
                 onClick={() => { setSelectedUser(u); setConfirmDelete(false); }}
               >
-                {isMe && (
-                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-violet-600/10 blur-[50px] rounded-full pointer-events-none" />
-                )}
-
+                {isMe && <div className="absolute -top-10 -right-10 w-32 h-32 bg-violet-600/10 blur-[50px] rounded-full pointer-events-none" />}
                 <div className="flex items-center gap-5 mb-5 relative z-10">
                   <div className={cn(
                     "h-20 w-20 rounded-2xl overflow-hidden shrink-0 shadow-2xl transition-all duration-500 border-2",
                     isMe ? "border-violet-500 scale-105" : "border-white/10 group-hover:border-cyan-400/50",
                     !isMe && isOnline && "border-cyan-400/50"
                   )}>
-                    {u.image ? (
-                      <img src={u.image} className="w-full h-full object-cover" alt="Avatar" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xl font-black text-white/10 uppercase italic bg-slate-800">
-                        {u.name?.charAt(0)}
-                      </div>
-                    )}
+                    {u.image ? <img src={u.image} className="w-full h-full object-cover" alt="Avatar" /> : <div className="w-full h-full flex items-center justify-center text-xl font-black text-white/10 bg-slate-800 uppercase italic">{u.name?.charAt(0)}</div>}
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className={cn(
-                        "font-black uppercase italic tracking-tighter truncate transition-colors leading-tight",
-                        isMe ? "text-2xl text-violet-400" : "text-lg text-white group-hover:text-cyan-400"
-                      )}>
-                        {u.name}
-                      </h4>
-                      {isMe && (
-                        <span className="px-2 py-0.5 bg-violet-500 text-white rounded-md text-[7px] font-black uppercase tracking-[0.2em] flex items-center gap-1 shadow-lg shadow-violet-500/20">
-                           <Zap size={8} fill="currentColor" /> System Host
-                        </span>
-                      )}
-                      {isFriendOfAdmin && !isMe && (
-                         <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-[7px] font-black text-emerald-400 uppercase tracking-widest">
-                           <Star size={8} className="inline mr-1" fill="currentColor" /> Friend
-                         </span>
-                      )}
+                      <h4 className={cn("font-black uppercase italic tracking-tighter truncate leading-tight", isMe ? "text-2xl text-violet-400" : "text-lg text-white group-hover:text-cyan-400")}>{u.name}</h4>
+                      {isMe && <span className="px-2 py-0.5 bg-violet-500 text-white rounded-md text-[7px] font-black uppercase tracking-[0.2em] flex items-center gap-1 shadow-lg shadow-violet-500/20"><Zap size={8} fill="currentColor" /> System Host</span>}
                     </div>
-                    <p className={cn(
-                      "font-medium lowercase tracking-tight truncate italic mt-0.5",
-                      isMe ? "text-violet-200/50 text-[11px]" : "text-cyan-100/70 text-[10px]"
-                    )}>
-                      {u.email}
-                    </p>
+                    <p className={cn("font-medium lowercase tracking-tight truncate italic mt-0.5", isMe ? "text-violet-200/50 text-[11px]" : "text-cyan-100/70 text-[10px]")}>{u.email}</p>
                   </div>
                 </div>
-
                 <div className="flex items-center justify-between pt-4 border-t border-white/5 relative z-10">
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col">
                        <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">Friends</p>
-                       <p className={cn("text-sm font-black italic", isMe ? "text-violet-400" : "text-white")}>{friendsCount}</p>
+                       <p className={cn("text-sm font-black italic", isMe ? "text-violet-400" : "text-white")}>{u.friendsCount || 0}</p>
                     </div>
-                    <div className={cn("px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] border shadow-sm", 
-                      isOnline ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 animate-pulse" : "bg-white/5 border-white/10 text-white/20")}>
-                      {isOnline ? "Live Node" : "Standby"}
-                    </div>
+                    <div className={cn("px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] border shadow-sm", isOnline ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 animate-pulse" : "bg-white/5 border-white/10 text-white/20")}>{isOnline ? "Live Node" : "Standby"}</div>
                   </div>
-                  
-                  <div className={cn(
-                    "h-11 w-11 flex items-center justify-center rounded-xl transition-all shadow-xl bg-white/5 text-white/20",
-                    isMe 
-                      ? "group-hover:bg-violet-600 group-hover:text-white shadow-violet-600/20" 
-                      : "group-hover:bg-cyan-500 group-hover:text-slate-950 shadow-cyan-500/20"
-                  )}>
-                    <ChevronRight size={22} className="group-hover:translate-x-1 transition-transform" />
-                  </div>
+                  <div className={cn("h-11 w-11 flex items-center justify-center rounded-xl transition-all shadow-xl bg-white/5 text-white/20", isMe ? "group-hover:bg-violet-600 group-hover:text-white shadow-violet-600/20" : "group-hover:bg-cyan-500 group-hover:text-slate-950 shadow-cyan-500/20")}><ChevronRight size={22} className="group-hover:translate-x-1 transition-transform" /></div>
                 </div>
               </div>
             );
@@ -214,71 +224,38 @@ export default function AdminPage() {
       {selectedUser && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={() => !isDeleting && setSelectedUser(null)} />
-          
           <div className="relative w-full max-w-lg bg-slate-900 border-2 border-white/10 rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500" />
-            
             <div className="p-8 space-y-8">
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-6">
                   <div className="h-24 w-24 rounded-[2rem] bg-slate-800 border-2 border-white/10 overflow-hidden shadow-2xl">
-                    {selectedUser.image ? (
-                      <img src={selectedUser.image} className="w-full h-full object-cover" alt="User" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl font-black text-white/10 uppercase italic">
-                        {selectedUser.name?.charAt(0)}
-                      </div>
-                    )}
+                    {selectedUser.image ? <img src={selectedUser.image} className="w-full h-full object-cover" alt="User" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-black text-white/10 uppercase italic">{selectedUser.name?.charAt(0)}</div>}
                   </div>
                   <div>
                     <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none">{selectedUser.name}</h2>
                     <div className="flex items-center gap-2 mt-3">
                        <span className={cn("h-2 w-2 rounded-full", selectedUser.isOnline ? "bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,1)]" : "bg-white/20")} />
-                       <span className="text-white/40 font-black uppercase tracking-[0.2em] text-[9px] italic">
-                         {selectedUser.isOnline ? "Secure Connection" : "Terminated Link"}
-                       </span>
+                       <span className="text-white/40 font-black uppercase tracking-[0.2em] text-[9px] italic">{selectedUser.isOnline ? "Secure Connection" : "Terminated Link"}</span>
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setSelectedUser(null)} className="p-2 text-white/10 hover:text-white transition-colors bg-white/5 rounded-xl">
-                  <X size={20} />
-                </button>
+                <button onClick={() => setSelectedUser(null)} className="p-2 text-white/10 hover:text-white transition-colors bg-white/5 rounded-xl"><X size={20} /></button>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <InfoBox icon={<Mail size={12}/>} label="User Identity" value={selectedUser.email} />
                 <InfoBox icon={<Calendar size={12}/>} label="Registry Date" value={new Date(selectedUser.createdAt).toLocaleDateString('de-DE')} />
                 <InfoBox icon={<Users size={12}/>} label="Connections" value={`${selectedUser.friendsCount || 0} Friends`} />
                 <InfoBox icon={<MessageSquare size={12}/>} label="Feed Activity" value={`${selectedUser.postsCount || 0} Posts`} />
               </div>
-
               <div className="space-y-3 pt-6 border-t border-white/5">
-                <button 
-                  onClick={() => router.push(`/profile/${selectedUser.id}`)}
-                  className="w-full flex items-center justify-center gap-3 p-5 bg-white text-slate-950 rounded-2xl hover:bg-cyan-400 transition-all font-black uppercase italic tracking-widest text-xs shadow-xl"
-                >
-                  <ExternalLink size={16} /> Access Master Profile
-                </button>
-
+                <button onClick={() => router.push(`/profile/${selectedUser.id}`)} className="w-full flex items-center justify-center gap-3 p-5 bg-white text-slate-950 rounded-2xl hover:bg-cyan-400 transition-all font-black uppercase italic tracking-widest text-xs shadow-xl"><ExternalLink size={16} /> Access Master Profile</button>
                 {!confirmDelete ? (
-                  <button 
-                    onClick={() => setConfirmDelete(true)}
-                    className="w-full flex items-center justify-center gap-3 p-5 bg-rose-500/10 border border-rose-500/20 rounded-2xl hover:bg-rose-500 text-rose-500 hover:text-white transition-all font-black uppercase italic tracking-widest text-[10px]"
-                  >
-                    <Trash2 size={16} /> Delete Entry
-                  </button>
+                  <button onClick={() => setConfirmDelete(true)} className="w-full flex items-center justify-center gap-3 p-5 bg-rose-500/10 border border-rose-500/20 rounded-2xl hover:bg-rose-500 text-rose-500 hover:text-white transition-all font-black uppercase italic tracking-widest text-[10px]"><Trash2 size={16} /> Delete Entry</button>
                 ) : (
                   <div className="flex gap-2 animate-in slide-in-from-bottom-4">
-                    <button 
-                      disabled={isDeleting}
-                      onClick={() => handleDeleteUser(selectedUser.id)}
-                      className="flex-[2] p-5 bg-rose-600 text-white rounded-2xl font-black uppercase italic text-xs hover:bg-rose-700 transition-colors shadow-2xl"
-                    >
-                      {isDeleting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "CONFIRM WIPE"}
-                    </button>
-                    <button onClick={() => setConfirmDelete(false)} className="flex-1 bg-white/5 text-white rounded-2xl font-black uppercase italic text-[10px]">
-                      CANCEL
-                    </button>
+                    <button disabled={isDeleting} onClick={() => handleDeleteUser(selectedUser.id)} className="flex-[2] p-5 bg-rose-600 text-white rounded-2xl font-black uppercase italic text-xs hover:bg-rose-700 transition-colors shadow-2xl">{isDeleting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "CONFIRM WIPE"}</button>
+                    <button onClick={() => setConfirmDelete(false)} className="flex-1 bg-white/5 text-white rounded-2xl font-black uppercase italic text-[10px]">CANCEL</button>
                   </div>
                 )}
               </div>
@@ -290,38 +267,26 @@ export default function AdminPage() {
   );
 }
 
-// --- HELPERS ---
+function SortButton({ label, active, order, onClick }: { label: string, active: boolean, order: SortOrder, onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border italic flex items-center gap-2", active ? "bg-violet-600 border-violet-500 text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white")}>{label} {active && <span className="opacity-60">{order === "asc" ? "↑" : "↓"}</span>}</button>
+  );
+}
 
 function InfoBox({ icon, label, value }: { icon: any, label: string, value: string }) {
   return (
     <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-      <div className="flex items-center gap-2 mb-1 opacity-30">
-        <span className="text-cyan-400">{icon}</span>
-        <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
-      </div>
+      <div className="flex items-center gap-2 mb-1 opacity-30"><span className="text-cyan-400">{icon}</span><span className="text-[8px] font-black uppercase tracking-widest">{label}</span></div>
       <p className="text-xs font-bold text-white/90 truncate italic">{value || "---"}</p>
     </div>
   );
 }
 
 function StatCard({ icon, label, value, color }: { icon: any, label: string, value: any, color: "cyan" | "rose" | "violet" }) {
-  const isCyan = color === "cyan";
-  const isViolet = color === "violet";
-  
   return (
-    <div className="bg-slate-950/40 p-5 rounded-3xl border border-white/5 flex items-center gap-4 min-w-[200px]">
-      <div className={cn(
-        "p-3 rounded-xl text-white shadow-xl", 
-        isCyan ? 'bg-cyan-500 shadow-cyan-500/20' : 
-        isViolet ? 'bg-violet-600 shadow-violet-600/20' : 
-        'bg-rose-500 shadow-rose-500/20'
-      )}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-0.5">{label}</p>
-        <p className="text-2xl font-black text-white italic leading-none">{value || 0}</p>
-      </div>
+    <div className="bg-slate-950/40 p-5 rounded-3xl border border-white/5 flex items-center gap-4 min-w-[180px]">
+      <div className={cn("p-3 rounded-xl text-white shadow-xl", color === "cyan" ? 'bg-cyan-500 shadow-cyan-500/20' : 'bg-violet-600 shadow-violet-600/20')}>{icon}</div>
+      <div><p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-0.5">{label}</p><p className="text-xl font-black text-white italic leading-none">{value || 0}</p></div>
     </div>
   );
 }
